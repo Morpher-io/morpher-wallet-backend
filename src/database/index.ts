@@ -24,7 +24,12 @@ export const sequelize = new Sequelize({
     },
     dialectOptions: {
         statement_timeout: 60000,
-        idle_in_transaction_session_timeout: 180000
+        idle_in_transaction_session_timeout: 180000,
+
+        ssl: {
+            require: true,
+            rejectUnauthorized: false // <<<<<<< YOU NEED THIS
+        }
     },
     pool: {
         max: 200,
