@@ -135,6 +135,32 @@ function sortObject(object: any) {
     return newObject;
 }
 
+const formatLogData = (data: any) => {
+    let removeKeys = ['encryptedSeed', 
+                'encrypted_seed', 
+                'access_token', 
+                'token', 
+                'authenticator2fa', 
+                'code',
+                'signature'];
+
+    if (!data) {
+        return data
+    }
+    if (typeof data !== 'object') {
+        return data;
+    }
+    let formatted = JSON.parse(JSON.stringify(data))
+    removeKeys.forEach(key => {
+        if (formatted[key]) {
+            formatted[key] = '-'
+        }
+    })
+
+    return formatted
+
+}
+
 /**
  * validate a recaptcha token passed by the web site
  */
@@ -169,7 +195,12 @@ function sortObject(object: any) {
     }
 };
 
+let ip_cache = {}
+
 export const getIPCountryCode = async ip_address => {
+    if (ip_cache[ip_address]) {
+        return ip_cache[ip_address]
+    }
     const axios = require('axios')
 
     let country_code = null;
@@ -211,6 +242,7 @@ export const getIPCountryCode = async ip_address => {
         }
     }
 
+    ip_cache[ip_address] = country_code
     return country_code;
 };
 
@@ -226,5 +258,6 @@ export {
     decrypt,
     sha256,
     randomFixedInteger,
-    sortObject
+    sortObject,
+    formatLogData
 };
