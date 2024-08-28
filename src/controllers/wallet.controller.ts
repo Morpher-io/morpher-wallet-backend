@@ -101,7 +101,7 @@ export async function saveEmailPassword(req: Request, res: Response) {
             // Commit changes to database and return successfully.
             await transaction.commit();
 
-            Logger.info({ method: arguments.callee.name, type: 'New Wallet', user_id: userId, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `saveEmailPassword: New Wallet [${userId}] [${email}] [${eth_address}]` });
+            Logger.info({ method: "saveEmailPassword", type: 'New Wallet', user_id: userId, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `saveEmailPassword: New Wallet [${userId}] [${email}] [${eth_address}]` });
 
             return successResponse(res, {
                 recovery_id: recoveryId
@@ -187,7 +187,7 @@ export async function addRecoveryMethod(req: Request, res: Response) {
             ).getDataValue('id');
 
             Logger.info({
-                method: arguments.callee.name,
+                method: "addRecoveryMethod",
                 type: 'Added new Recovery Method',
                 user_id: emailRecovery.user_id,
                 recovery_id: newRecoveryId,
@@ -222,7 +222,7 @@ export async function updatePassword(req: Request, res: Response) {
             await recovery.save();
 
             Logger.info({
-                method: arguments.callee.name,
+                method: "updatePassword",
                 type: 'Password Change',
                 user_id: recovery.user_id,
                 headers: formatLogData(req.headers),
@@ -286,7 +286,7 @@ export async function updateEmail(req: Request, res: Response) {
                         } //send the old user an info-mail that his email address got updated.
 
                         Logger.info({
-                            method: arguments.callee.name,
+                            method: "updateEmail",
                             type: 'Email Change',
                             user_id: user.id,
                             old_value: user.email,
@@ -439,7 +439,7 @@ export async function getEncryptedSeed(req, res) {
 
             if (user.payload.needConfirmation) {
                 Logger.info({
-                    method: arguments.callee.name,
+                    method: "getEncryptedSeed",
                     type: 'Error: Account not confirmed',
                     error: '2fa wrong',
                     user_id: user.id,
@@ -459,7 +459,7 @@ export async function getEncryptedSeed(req, res) {
 
             if (!email2FAVerified || !googleVerified) {
                 Logger.info({
-                    method: arguments.callee.name,
+                    method: "getEncryptedSeed",
                     type: 'Error: Fetch Encrypted Seed Failed',
                     error: '2fa wrong',
                     user_id: user.id,
@@ -476,7 +476,7 @@ export async function getEncryptedSeed(req, res) {
             }
             if (!email2faStillValid) {
                 Logger.info({
-                    method: arguments.callee.name,
+                    method: "getEncryptedSeed",
                     type: 'Error: Fetch Encrypted Seed Failed',
                     error: '2fa expired',
                     user_id: user.id,
@@ -499,7 +499,7 @@ export async function getEncryptedSeed(req, res) {
             //only if the codes are correct we get the juicy seed.
 
             Logger.info({
-                method: arguments.callee.name,
+                method: "getEncryptedSeed",
                 type: 'Fetch Encrypted Seed',
                 user_id: user.id,
                 headers: formatLogData(req.headers),
@@ -608,12 +608,15 @@ export async function getPayload(req, res) {
                 }
             }
 
+
             if (ip_country && user.ip_country !== ip_country) {
                 Logger.log({ source: 'getPayload', data: { id: user.id, old_country: user.ip_country, new_country: ip_country }, message: `getPayload: User country changed [${user.id}] [${user.ip_country} to ${ip_country}]` });
                 user.ip_country = ip_country;
             }
 
             await user.save();
+
+
 
             if (user != null && user['payload'] !== null) {
                 // default app language to en 
@@ -640,6 +643,7 @@ export async function getPayload(req, res) {
             }
         }
 
+
         if (user) {
             if (recovery.recovery_type_id !== 1) {
                 payload['user_email'] = user.email;
@@ -650,7 +654,7 @@ export async function getPayload(req, res) {
                 payload['needConfirmation'] = false;
             }
 
-            Logger.info({ method: arguments.callee.name, type: 'Get Payload', user_id: user.id, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getPayload: Successful [${user.id}] [${user.email}]` });
+            Logger.info({ method: "getPayload", type: 'Get Payload', user_id: user.id, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getPayload: Successful [${user.id}] [${user.email}]` });
 
             return successResponse(res, payload);
         } else {
@@ -670,7 +674,7 @@ export async function getNonce(req, res) {
         const key = req.body.key;
         const recovery = await Recovery.findOne({ where: { key } });
         if (recovery == null) {
-            Logger.info({ method: arguments.callee.name, type: 'Error: User Not found', key, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getNonce: User not found [${key.substr(0, 10)}...]` });
+            Logger.info({ method: "getNonce", type: 'Error: User Not found', key, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getNonce: User not found [${key.substr(0, 10)}...]` });
             return errorResponse(res, 'USER_NOT_FOUND', 404);
         }
 
@@ -688,7 +692,7 @@ export async function getNonce(req, res) {
 
 
         if (user) {
-            Logger.info({ method: arguments.callee.name, type: 'Get Nonce', user_id: user.id, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getNonce: User found [${user.id}]` });
+            Logger.info({ method: "getNonce", type: 'Get Nonce', user_id: user.id, headers: formatLogData(req.headers), body: formatLogData(req.body), message: `getNonce: User found [${user.id}]` });
             return successResponse(res, { nonce: user.nonce });
         } else {
             return errorResponse(res, 'NONCE_NOT_FOUND', 404);
@@ -737,7 +741,7 @@ export async function change2FAMethods(req, res) {
                     }
 
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "change2FAMethods",
                         type: '2FA Email Sent',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -759,7 +763,7 @@ export async function change2FAMethods(req, res) {
 
                 if (!authenticator2faVerification || !await verifyGoogle2FA(user.id.toString(), authenticator2faVerification, false)) {
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "change2FAMethods",
                         type: 'Error: Authenticator Code Wrong',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -788,7 +792,7 @@ export async function change2FAMethods(req, res) {
             await user.save();
 
             Logger.info({
-                method: arguments.callee.name,
+                method: "change2FAMethods",
                 type: '2FA Methods Changed',
                 user_id: user.id,
                 headers: formatLogData(req.headers),
@@ -827,7 +831,7 @@ export async function generateAuthenticatorQR(req, res) {
                     await user.save();
 
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "change2FAMethods",
                         type: 'Generated Authenticator QR Code',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -868,7 +872,7 @@ export async function verifyAuthenticatorCode(req, res) {
                         await user.save();
                     }
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "verifyAuthenticatorCode",
                         type: 'Verify Authenticator Code',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -878,7 +882,7 @@ export async function verifyAuthenticatorCode(req, res) {
                     return successResponse(res, true);
                 } else {
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "verifyAuthenticatorCode",
                         type: 'Error: Authenticator Code Wrong',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -889,7 +893,7 @@ export async function verifyAuthenticatorCode(req, res) {
                 }
             }
         }
-        Logger.info({ method: arguments.callee.name, type: 'Error: User Not found', headers: formatLogData(req.headers), body: formatLogData(req.body) });
+        Logger.info({ method: "verifyAuthenticatorCode", type: 'Error: User Not found', headers: formatLogData(req.headers), body: formatLogData(req.body) });
         return errorResponse(res, 'USER_NOT_FOUND', 404);
     } catch (error) {
         Logger.error({ source: 'verifyAuthenticatorCode', data: formatLogData(req.body), message: error.message || error.toString() });
@@ -923,7 +927,7 @@ export async function send2FAEmail(req, res) {
             }
 
             Logger.info({
-                method: arguments.callee.name,
+                method: "send2FAEmail",
                 type: '2FA Email Sent',
                 user_id: user.id,
                 headers: formatLogData(req.headers),
@@ -953,7 +957,7 @@ export async function verifyEmailCode(req, res) {
                 if (await isEmail2FaStillValid(recovery.user_id)) {
                     if (await verifyEmail2FA(recovery.user_id, code, true)) {
                         Logger.info({
-                            method: arguments.callee.name,
+                            method: "verifyEmailCode",
                             type: 'Email 2FA Code Verified',
                             user_id: user.id,
                             headers: formatLogData(req.headers),
@@ -963,7 +967,7 @@ export async function verifyEmailCode(req, res) {
                         return successResponse(res, true);
                     } else {
                         Logger.info({
-                            method: arguments.callee.name,
+                            method: "verifyEmailCode",
                             type: 'Error: Email 2FA Code Wrong',
                             user_id: user.id,
                             headers: formatLogData(req.headers),
@@ -974,7 +978,7 @@ export async function verifyEmailCode(req, res) {
                     }
                 } else {
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "verifyEmailCode",
                         type: 'Error: Email 2FA Code Expired',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -1008,7 +1012,7 @@ export async function verifyEmailConfirmationCode(req, res) {
                     await user.save();
 
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "verifyEmailConfirmationCode",
                         type: 'Email Confirmation Code Verified',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -1018,7 +1022,7 @@ export async function verifyEmailConfirmationCode(req, res) {
                     return successResponse(res, true);
                 } else {
                     Logger.info({
-                        method: arguments.callee.name,
+                        method: "verifyEmailConfirmationCode",
                         type: 'Error: Email Confirmation Code Wrong',
                         user_id: user.id,
                         headers: formatLogData(req.headers),
@@ -1063,7 +1067,7 @@ export async function resetRecovery(req, res) {
             const recovery = await Recovery.findOne({ where: { user_id: defaultRecovery.user_id, recovery_type_id: recoveryTypeId } });
             if (recovery !== null) {
                 Logger.info({
-                    method: arguments.callee.name,
+                    method: "resetRecovery",
                     type: 'Recovery Method Removed',
                     recovery: {...recovery, encrypted_seed: '-'},
                     headers: formatLogData(req.headers),
@@ -1077,7 +1081,7 @@ export async function resetRecovery(req, res) {
 
 
             Logger.error({
-                method: arguments.callee.name,
+                method: "resetRecovery",
                 type: 'Error: Recovery Method Not found',
                 recovery: {...recovery, encrypted_seed: '-'},
                 headers: formatLogData(req.headers),
@@ -1088,7 +1092,7 @@ export async function resetRecovery(req, res) {
         }
 
         Logger.error({
-            method: arguments.callee.name,
+            method: "resetRecovery",
             type: 'Error: User Not Found',
             key,
             headers: formatLogData(req.headers),
@@ -1115,7 +1119,7 @@ export async function deleteAccount(req, res) {
                     stringified_headers: JSON.stringify(req.headers)
                 });
                 Logger.info({
-                    method: arguments.callee.name,
+                    method: "deleteAccount",
                     type: 'User Account Deleted',
                     headers: formatLogData(req.headers),
                     body: formatLogData(req.body),
@@ -1128,7 +1132,7 @@ export async function deleteAccount(req, res) {
         }
 
         Logger.error({
-            method: arguments.callee.name,
+            method: "deleteAccount",
             type: 'Error: User Not Found',
             headers: formatLogData(req.headers),
             body: formatLogData(req.body),
