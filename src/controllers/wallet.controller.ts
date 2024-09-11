@@ -1164,6 +1164,10 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
                     await sendEmail2FA(verificationCode, email_override, user);
                 }
             }
+        } else {
+            // change verification code so that it can be used only once
+            const verificationCode = randomFixedInteger(6);
+            user.email_verification_code = verificationCode;
         }
         return verified
     }
