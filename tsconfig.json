@@ -5,6 +5,7 @@
     "noImplicitReturns": false,
     "outDir": "dist",
     "sourceMap": true,
+    "strict": false,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,

@@ -1,4 +1,5 @@
 import { Recovery_Type } from '../../database/models/Recovery_Type.model';
+import axios from 'axios';
 
 const crypto = require('crypto');
 
@@ -135,6 +136,32 @@ function sortObject(object: any) {
     return newObject;
 }
 
+const formatLogData = (data: any) => {
+    let removeKeys = ['encryptedSeed', 
+                'encrypted_seed', 
+                'access_token', 
+                'token', 
+                'authenticator2fa', 
+                'code',
+                'signature'];
+
+    if (!data) {
+        return data
+    }
+    if (typeof data !== 'object') {
+        return data;
+    }
+    let formatted = JSON.parse(JSON.stringify(data))
+    removeKeys.forEach(key => {
+        if (formatted[key]) {
+            formatted[key] = '-'
+        }
+    })
+
+    return formatted
+
+}
+
 /**
  * validate a recaptcha token passed by the web site
  */
@@ -144,7 +171,6 @@ function sortObject(object: any) {
         if (process.env.RECAPTCHA_SECRET == 'DISABLED') {
             return true;
         }
-        const axios = require('axios')
 
         const response = await  axios.post(
                 'https://www.google.com/recaptcha/api/siteverify?secret=' +
@@ -169,8 +195,12 @@ function sortObject(object: any) {
     }
 };
 
+let ip_cache = {}
+
 export const getIPCountryCode = async ip_address => {
-    const axios = require('axios')
+    if (ip_cache[ip_address]) {
+        return ip_cache[ip_address]
+    }
 
     let country_code = null;
     if (!ip_address || ip_address === '127.0.0.1' || ip_address === '::ffff:127.0.0.1') {
@@ -211,6 +241,7 @@ export const getIPCountryCode = async ip_address => {
         }
     }
 
+    ip_cache[ip_address] = country_code
     return country_code;
 };
 
@@ -226,5 +257,6 @@ export {
     decrypt,
     sha256,
     randomFixedInteger,
-    sortObject
+    sortObject,
+    formatLogData
 };
