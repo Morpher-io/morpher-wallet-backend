@@ -125,6 +125,10 @@ export async function getRecoveryMethods(req: Request, res: Response) {
         const recovery_type_id = Number(req.body.recovery_type || 1);
         const key = req.header('key');
         const recoveryEmail = await Recovery.findOne({ where: { key, recovery_type_id: recovery_type_id } });
+        if (!recoveryEmail) {
+            Logger.warn({ source: 'getRecoveryMethods', data: formatLogData(req.body), message: 'Error fetching recovery methods: User Not found' });
+            return errorResponse(res, 'USER_NOT_FOUND', 404);
+        }
         const recovery = await Recovery.findAll({ where: { user_id: recoveryEmail.user_id }, include: [Recovery_Type] });
         const recoveryTypes = [];
         for (let i = 0; i < recovery.length; i++) {
@@ -916,6 +920,10 @@ export async function send2FAEmail(req, res) {
     try {
         const key = req.body.key;
         const recovery = await Recovery.findOne({ where: { key } });
+        if (!recovery) {
+            Logger.warn({ source: 'send2FAEmail', data: formatLogData(req.body), message: 'Error sending 2fa: User Not found' });
+            return errorResponse(res, 'USER_NOT_FOUND', 404);
+        }
         const user = await User.findOne({ where: { id: recovery.user_id } });
         const sendEmails = process.env.SEND_EMAILS;
 
