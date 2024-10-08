@@ -21,7 +21,7 @@ export async function resetSendLimit(user) {
     await user.save();
 }
 
-export async function checkSendLimit(user) {
+export async function checkSendLimit(user: User) {
     if (!user.payload.email2fa_send_timestamp || user.payload.email2fa_send_timestamp < Date.now() - 1000 * 60 * 60) {
         user.payload.email2fa_send_timestamp = Date.now()
         user.payload.email2fa_send_count = 0;
@@ -31,8 +31,10 @@ export async function checkSendLimit(user) {
     user.payload.email2fa_send_count = (user.payload.email2fa_send_count || 0) + 1;
     user.changed('payload', true);
     await user.save()
-
+    
     if (user.payload.email2fa_send_count > 20) {
+        Logger.warn({ data: { user: user.email, eth_address: user.eth_address, email2fa_send_count: user.payload.email2fa_send_count} , message: '2FA Email Send Limit Reached'});
+
         return false
     } else {
         return true
