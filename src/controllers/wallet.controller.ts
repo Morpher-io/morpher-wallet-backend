@@ -912,6 +912,8 @@ async function updateEmail2fa(user_id) {
     user.email2fa_valid_until = new Date(Date.now() + (15 * 60 * 1000)); //15 minutes valid
     user.payload.email2fa_retry_count = 0;
 
+    user.changed('payload', true)
+
     await user.save();
     return user.email_verification_code;
 }
@@ -1163,6 +1165,8 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
         const verified = user.email_verification_code === Number(code)
         if (!verified) {
             user.payload.email2fa_retry_count = (user.payload.email2fa_retry_count || 0) + 1;
+            user.changed('payload', true)
+            await user.save();
             if (user.payload.email2fa_retry_count >=3) {
                 const verificationCode = await updateEmail2fa(user.id);
                 if (sendEmails === 'true') {
@@ -1184,6 +1188,8 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
 
     if (!verified) {
         user.payload.email2fa_retry_count = (user.payload.email2fa_retry_count || 0) + 1;
+        user.changed('payload', true)
+        await user.save();
         if (user.payload.email2fa_retry_count >=3) {
             const verificationCode = await updateEmail2fa(user.id);
             if (sendEmails === 'true') {

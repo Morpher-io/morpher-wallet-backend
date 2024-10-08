@@ -6,6 +6,7 @@ const secureRoutes = require('./secure');
 import rateLimit from 'express-rate-limit'
 
 import { Logger } from '../../helpers/functions/winston';
+import { Request, Response } from 'express';
 
 const limitReached = (req: any, res: any) => {
     Logger.warn({ data: { ip: req.ip, method: req.method, path: req.path, url: req.originalUrl }, message: 'Rate limiter triggered' });
@@ -14,7 +15,12 @@ const limitReached = (req: any, res: any) => {
 const limiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
-    onLimitReached: limitReached,
+    handler: (request, response, next, options) => {
+		if (request.rateLimit.used === request.rateLimit.limit + 1) {
+			limitReached(request, response)
+		}
+		response.status(options.statusCode).send(options.message)
+	},
     keyGenerator(req, res) {
         return req.body.key;
     }
@@ -23,12 +29,18 @@ const limiter = rateLimit({
 const limiterUser = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
-    onLimitReached: limitReached,
-    keyGenerator(req, res) {
+    handler: (request, response, next, options) => {
+		if (request.rateLimit.used === request.rateLimit.limit + 1) {
+			limitReached(request, response)
+		}
+		response.status(options.statusCode).send(options.message)
+	},
+    keyGenerator(req: Request, res: Response) {
+        console.log('req.body.key', req.body.key, req.ip)
         if (req.body.key && req.body.key) {
             return req.body.key;
         } else {
-            return Date.now();
+            return  req.ip || Date.now();
         }
     }
 });
@@ -53,7 +65,12 @@ if (process.env.RATE_LIMIT_IP_EXCLUDE) {
 const limiterGetPayload =  rateLimit({
     windowMs: 1 * 60 * 60 * 1000,
     max: 30,
-    onLimitReached: limitReached,
+    handler: (request, response, next, options) => {
+		if (request.rateLimit.used === request.rateLimit.limit + 1) {
+			limitReached(request, response)
+		}
+		response.status(options.statusCode).send(options.message)
+	},
     keyGenerator(req, res) {
 
         /** 
