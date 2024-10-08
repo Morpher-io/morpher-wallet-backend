@@ -3,7 +3,7 @@ import { User, Userhistory, Recovery, Recovery_Type } from '../database/models';
 import { decrypt, encrypt, errorResponse, successResponse, sha256, randomFixedInteger, getIPCountryCode, formatLogData } from '../helpers/functions/util';
 const { to } = require('await-to-js');
 import { Request, Response } from 'express';
-import { sendEmail2FA, sendEmailChanged } from '../helpers/functions/email';
+import { checkSendLimit, resetSendLimit, sendEmail2FA, sendEmailChanged } from '../helpers/functions/email';
 import { authenticator } from 'otplib';
 const QRCode = require('qrcode');
 const countryList = process.env.COUNTRY_LIST || '[]';
@@ -268,6 +268,9 @@ export async function updateEmail(req: Request, res: Response) {
                 //email 2FA alredy sent out to verify new email address exists?
                 if (email2faVerification === undefined) {
                     const verificationCode = await updateEmail2fa(user.id);
+                    if (!await checkSendLimit(user)) {
+                        return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+                    }
                     if (sendEmails === 'true') {
                         await sendEmail2FA(verificationCode, newEmail, user);
                     }
@@ -739,7 +742,9 @@ export async function change2FAMethods(req, res) {
                 if (!email2faVerification) {
 
                     const verificationCode = await updateEmail2fa(user.id);
-
+                    if (!await checkSendLimit(user)) {
+                        return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+                    }
                     if (sendEmails === 'true') {
                         await sendEmail2FA(verificationCode, user.email, user);
                     }
@@ -931,7 +936,9 @@ export async function send2FAEmail(req, res) {
 
         try {
             const verificationCode = await updateEmail2fa(user.id);
-
+            if (!await checkSendLimit(user)) {
+                return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+            }
             if (sendEmails === 'true') {
                 await sendEmail2FA(verificationCode, user.email, user);
             }
@@ -1173,13 +1180,18 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
                     if (!email_override) {
                         email_override = user.email
                     }
-                    await sendEmail2FA(verificationCode, email_override, user);
+                    if (!await checkSendLimit(user)) {
+                        await sendEmail2FA(verificationCode, email_override, user);
+                    }
                 }
             }
         } else {
             // change verification code so that it can be used only once
             const verificationCode = randomFixedInteger(6);
             user.email_verification_code = verificationCode;
+        }
+        if (verified) {
+            resetSendLimit(user)
         }
         return verified
     }
@@ -1196,9 +1208,13 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
                 if (!email_override) {
                     email_override = user.email
                 }
-                await sendEmail2FA(verificationCode, email_override, user);
+                if (!await checkSendLimit(user)) {
+                    await sendEmail2FA(verificationCode, email_override, user);
+                }
             }
         }
+    } else {
+        resetSendLimit(user)
     }
 
     return verified

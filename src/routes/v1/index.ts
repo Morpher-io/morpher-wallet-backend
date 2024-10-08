@@ -12,6 +12,17 @@ const limitReached = (req: any, res: any) => {
     Logger.warn({ data: { ip: req.ip, method: req.method, path: req.path, url: req.originalUrl }, message: 'Rate limiter triggered' });
 };
 
+const limiterSendEmail = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    handler: (request, response, next, options) => {
+		if (request.rateLimit.used === request.rateLimit.limit + 1) {
+			limitReached(request, response)
+		}
+		response.status(options.statusCode).send(options.message)
+	}
+});
+
 const limiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
@@ -131,12 +142,12 @@ module.exports = function (express) {
 
     router.post('/getPayload', recaptcha, limiterGetPayload, WalletController.getPayload);
     router.post('/getNonce', limiterGetPayload, WalletController.getNonce);
-    router.post('/send2FAEmail', WalletController.send2FAEmail);
+    router.post('/send2FAEmail', limiterSendEmail, WalletController.send2FAEmail);
     router.post('/verifyEmailCode', limiterGetPayload, limiterUser, WalletController.verifyEmailCode);
     router.post('/verifyEmailConfirmationCode', limiterGetPayload, limiterUser, WalletController.verifyEmailConfirmationCode);
     router.post('/verifyAuthenticatorCode', limiterGetPayload, limiterUser, WalletController.verifyAuthenticatorCode);
     router.post('/validateInput', ValidationController.validateInput);
-    router.post('/recoveryVKAuthToken', WalletController.recoveryVKAuthToken);
+    router.post('/recoveryVKAuthToken', limiterSendEmail, WalletController.recoveryVKAuthToken);
     
 
     /**

@@ -14,6 +14,31 @@ const SES_NOTIFICATIONS = new SESClient({
     apiVersion: '2010-12-01'
 });
 
+export async function resetSendLimit(user) {
+    user.payload.email2fa_send_timestamp = Date.now();
+    user.payload.email2fa_send_count = 0;
+    user.changed('payload', true);
+    await user.save();
+}
+
+export async function checkSendLimit(user) {
+    if (!user.payload.email2fa_send_timestamp || user.payload.email2fa_send_timestamp < Date.now() - 1000 * 60 * 60) {
+        user.payload.email2fa_send_timestamp = Date.now()
+        user.payload.email2fa_send_count = 0;
+        user.changed('payload', true);
+    }
+
+    user.payload.email2fa_send_count = (user.payload.email2fa_send_count || 0) + 1;
+    user.changed('payload', true);
+    await user.save()
+
+    if (user.payload.email2fa_send_count > 20) {
+        return false
+    } else {
+        return true
+    }
+}
+
 export async function sendEmail2FA(payload, email, user) {
     const lang = user.payload.app_lang || 'en';
 
