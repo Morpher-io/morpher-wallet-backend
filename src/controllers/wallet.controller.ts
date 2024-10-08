@@ -1172,7 +1172,7 @@ export async function deleteAccount(req, res) {
 
 async function reverifyEmail2FA(user_id: string, code: string): Promise<boolean> {
     const user = await User.findOne({ where: { id: user_id } });
-    const verified = user.payload.email === false || (user.email_verification_code === Number(code)) || (user.email_verification_code === Number(code));
+    const verified = user.payload.email === false || (user.email_verification_code === Number(code)) || (user.email_verified_code === Number(code));
     return verified
 }
 
