@@ -268,14 +268,15 @@ export async function updateEmail(req: Request, res: Response) {
             if (user_should_not_exist == null) {
                 //email 2FA alredy sent out to verify new email address exists?
                 if (email2faVerification === undefined) {
-                    const verificationCode = await updateEmail2fa(user, false, transaction);
+                    transaction.commit(); //close the transaction before the 2fa is sent
+
+                    const verificationCode = await updateEmail2fa(user, false);
                     if (!await checkSendLimit(user)) {
                         return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
                     }
                     if (sendEmails === 'true') {
                         await sendEmail2FA(verificationCode, newEmail, user);
                     }
-                    transaction.commit(); //close the transaction after the 2fa was sent
                     return successResponse(res, 'sent 2fa code to new email address');
                 } else {
                     // 2FA tokens in query params
@@ -336,6 +337,14 @@ export async function updateEmail(req: Request, res: Response) {
         await transaction.rollback();
         return errorResponse(res, 'INTERNAL_SERVER_ERROR', 500);
     } catch (error) {
+        
+        try {
+            if (transaction) { 
+                transaction.rollback()
+            }
+        } catch (err) {
+
+        }
         Logger.error({ source: 'updateEmail', data: formatLogData(req.body), message: error.message || error.toString() });
         return errorResponse(res, 'INTERNAL_SERVER_ERROR', 500);
     }
@@ -916,7 +925,7 @@ export async function verifyAuthenticatorCode(req, res) {
     }
 }
 
-async function updateEmail2fa(user: User, verified: boolean, transaction?: Transaction) {
+async function updateEmail2fa(user: User, verified: boolean) {
     const verificationCode = randomFixedInteger(6);
     if (verified) {
         user.email_verified_code = user.email_verification_code;
@@ -929,7 +938,7 @@ async function updateEmail2fa(user: User, verified: boolean, transaction?: Trans
     user.changed('payload', true)
 
 
-    await user.save({transaction});
+    await user.save();
     return user.email_verification_code;
 }
 

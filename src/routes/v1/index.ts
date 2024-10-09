@@ -126,7 +126,7 @@ module.exports = function (express) {
     const router = express.Router();
     const { secret, recaptcha } = require('../../helpers/functions/middleware');
 
-    if (process.env.ENVIRONMENT === 'development') {
+    if (process.env.TEST_BACKEND === 'TEST') {
         const testingRoutes = require('./testing')(express.Router());
         router.use('/test', testingRoutes);
     }
