@@ -11,6 +11,7 @@ import { Logger } from '../helpers/functions/winston';
 import { getKeyEmail } from '../helpers/functions/sso';
 const vk_tokens = {};
 import axios from 'axios';
+import { Transaction } from 'sequelize';
 
 // Function to save new signups to the database.
 export async function saveEmailPassword(req: Request, res: Response) {
@@ -267,7 +268,7 @@ export async function updateEmail(req: Request, res: Response) {
             if (user_should_not_exist == null) {
                 //email 2FA alredy sent out to verify new email address exists?
                 if (email2faVerification === undefined) {
-                    const verificationCode = await updateEmail2fa(user.id, false);
+                    const verificationCode = await updateEmail2fa(user, false, transaction);
                     if (!await checkSendLimit(user)) {
                         return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
                     }
@@ -279,7 +280,8 @@ export async function updateEmail(req: Request, res: Response) {
                 } else {
                     // 2FA tokens in query params
                     // Attempt to get user from database.
-                    if (await verifyEmail2FA(user.id.toString(), email2faVerification, true, newEmail)) {
+                    const status = await verifyEmail2FA(user.id.toString(), email2faVerification, true, newEmail)
+                    if (status === 'pass') {
                         //2fa passed here
                         Userhistory.create({
                             user_id: user.id,
@@ -317,7 +319,11 @@ export async function updateEmail(req: Request, res: Response) {
                         await transaction.commit();
                         return successResponse(res, { updated: true });
                     } else {
-                        return errorResponse(res, 'EMAIL_2FA_WRONG', 400);
+                        if (status === 'retry') {
+                            return errorResponse(res, 'EMAIL_2FA_RESENT', 400);
+                        } else {
+                            return errorResponse(res, 'EMAIL_2FA_WRONG', 400);
+                        }
                     }
                 }
             } else {
@@ -496,7 +502,7 @@ export async function getEncryptedSeed(req, res) {
 
             //avoid replay attack, generate a new Email 2FA after it was validated and seed was sent
             if (user.payload.email) {
-                updateEmail2fa(user.id, false);
+                updateEmail2fa(user, false);
             }
 
             if (recovery_type_id !== 1 && email && recovery.email !== email) {
@@ -741,7 +747,7 @@ export async function change2FAMethods(req, res) {
             if (toggleEmail) {
                 if (!email2faVerification) {
 
-                    const verificationCode = await updateEmail2fa(user.id, false);
+                    const verificationCode = await updateEmail2fa(user, false);
                     if (!await checkSendLimit(user)) {
                         return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
                     }
@@ -910,10 +916,8 @@ export async function verifyAuthenticatorCode(req, res) {
     }
 }
 
-async function updateEmail2fa(user_id: number, verified: boolean) {
-    const user = await User.findOne({ where: { id: user_id } });
+async function updateEmail2fa(user: User, verified: boolean, transaction?: Transaction) {
     const verificationCode = randomFixedInteger(6);
-
     if (verified) {
         user.email_verified_code = user.email_verification_code;
     }
@@ -921,11 +925,11 @@ async function updateEmail2fa(user_id: number, verified: boolean) {
     user.email_verification_code = verificationCode;
     user.email2fa_valid_until = new Date(Date.now() + (15 * 60 * 1000)); //15 minutes valid
     user.payload.email2fa_retry_count = 0;
-
+    
     user.changed('payload', true)
 
 
-    await user.save();
+    await user.save({transaction});
     return user.email_verification_code;
 }
 
@@ -941,7 +945,7 @@ export async function send2FAEmail(req, res) {
         const sendEmails = process.env.SEND_EMAILS;
 
         try {
-            const verificationCode = await updateEmail2fa(user.id, false);
+            const verificationCode = await updateEmail2fa(user, false);
             if (!await checkSendLimit(user)) {
                 return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
             }
@@ -978,7 +982,9 @@ export async function verifyEmailCode(req, res) {
             const user = await User.findOne({ where: { id: recovery.user_id } });
             if (user != null) {
                 if (await isEmail2FaStillValid(recovery.user_id)) {
-                    if (await verifyEmail2FA(recovery.user_id, code, true)) {
+
+                    const status = await verifyEmail2FA(recovery.user_id, code, true)
+                    if (status === 'pass') {
                         Logger.info({
                             method: "verifyEmailCode",
                             type: 'Email 2FA Code Verified',
@@ -997,7 +1003,12 @@ export async function verifyEmailCode(req, res) {
                             body: formatLogData(req.body),
                             message: `verifyEmailCode: 2FA Email Wrong [${user.id}] [${user.email}]`
                         });
-                        return errorResponse(res, 'CANNOT_VERIFY_EMAIL_CODE', 400);
+                        if (status === 'retry') {
+                            return errorResponse(res, 'EMAIL_2FA_RESENT', 400);
+                        } else {
+                            return errorResponse(res, 'EMAIL_2FA_WRONG', 400);
+                        }
+                        
                     }
                 } else {
                     Logger.info({
@@ -1028,7 +1039,9 @@ export async function verifyEmailConfirmationCode(req, res) {
         if (recovery != null) {
             const user = await User.findOne({ where: { id: recovery.user_id } });
             if (user != null) {
-                if (await verifyEmail2FA(recovery.user_id, code)) {
+
+                const status = await verifyEmail2FA(recovery.user_id, code)
+                if (status === 'pass') {
                     user.payload.needConfirmation = false;
                     user.payload.registerConfirmation = false;
                     user.changed('payload', true);
@@ -1052,7 +1065,11 @@ export async function verifyEmailConfirmationCode(req, res) {
                         body: formatLogData(req.body),
                         message: `verifyEmailConfirmationCode: 2FA Email Wrong [${user.id}] [${user.email}]`
                     });
-                    return errorResponse(res, 'CANNOT_VERIFY_EMAIL_CODE', 400);
+                    if (status === 'retry') {
+                        return errorResponse(res, 'EMAIL_2FA_RESENT', 400);
+                    } else {
+                        return errorResponse(res, 'EMAIL_2FA_WRONG', 400);
+                    }
                 }
             }
         }
@@ -1176,7 +1193,7 @@ async function reverifyEmail2FA(user_id: string, code: string): Promise<boolean>
     return verified
 }
 
-async function verifyEmail2FA(user_id: string, code: string, isEmailChange: boolean = false, email_override: String = ''): Promise<boolean> {
+async function verifyEmail2FA(user_id: string, code: string, isEmailChange: boolean = false, email_override: String = ''): Promise<'pass' | 'fail' | 'retry'> {
     const user = await User.findOne({ where: { id: user_id } });
     const sendEmails = process.env.SEND_EMAILS;
 
@@ -1187,22 +1204,26 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
             user.changed('payload', true)
             await user.save();
             if (user.payload.email2fa_retry_count >=3) {
-                const verificationCode = await updateEmail2fa(user.id, false);
+                const verificationCode = await updateEmail2fa(user, false);
                 if (sendEmails === 'true') {
                     if (!email_override) {
                         email_override = user.email
                     }
-                    if (!await checkSendLimit(user)) {
+                    if (await checkSendLimit(user)) {
                         await sendEmail2FA(verificationCode, email_override, user);
                     }
                 }
+                return 'retry'
+
             }
+            return 'fail'
         } else {
             // change verification code so that it can be used only once
-            await updateEmail2fa(user.id, true);
+            await updateEmail2fa(user, true);
             resetSendLimit(user)
+            return 'pass'
         }
-        return verified
+        
     }
 
     const verified = user.payload.email === false || (user.email_verification_code === Number(code));
@@ -1212,26 +1233,26 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
         user.changed('payload', true)
         await user.save();
         if (user.payload.email2fa_retry_count >=3) {
-            const verificationCode = await updateEmail2fa(user.id, false);
+            const verificationCode = await updateEmail2fa(user, false);
             if (sendEmails === 'true') {
                 if (!email_override) {
                     email_override = user.email
                 }
-                if (!await checkSendLimit(user)) {
+                if (await checkSendLimit(user)) {
                     await sendEmail2FA(verificationCode, email_override, user);
                 }
             }
+            return 'retry'
         }
+        return 'fail'
     } else {
         if (user.payload.email !== false) {
             // change verification code so that it can be used only once
-            await updateEmail2fa(user.id, true);
+            await updateEmail2fa(user, true);
             resetSendLimit(user)
         }
-        
+        return 'pass'
     }
-
-    return verified
 
 }
 
