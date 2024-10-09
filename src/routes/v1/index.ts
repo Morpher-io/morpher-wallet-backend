@@ -47,7 +47,6 @@ const limiterUser = rateLimit({
 		response.status(options.statusCode).send(options.message)
 	},
     keyGenerator(req: Request, res: Response) {
-        console.log('req.body.key', req.body.key, req.ip)
         if (req.body.key && req.body.key) {
             return req.body.key;
         } else {
