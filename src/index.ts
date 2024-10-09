@@ -27,7 +27,12 @@ const limitReached = (req: express.Request, res: express.Response) => {
 
 const limiter = {
     windowMs: 60 * 1000, // 1 minute
-    onLimitReached: limitReached,
+    handler: (request, response, next, options) => {
+		if (request.rateLimit.used === request.rateLimit.limit + 1) {
+			limitReached(request, response)
+		}
+		response.status(options.statusCode).send(options.message)
+	},
     max: 200 // limit each IP to 60 requests per minute
 };
 

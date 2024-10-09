@@ -3,7 +3,7 @@ import { User, Userhistory, Recovery, Recovery_Type } from '../database/models';
 import { decrypt, encrypt, errorResponse, successResponse, sha256, randomFixedInteger, getIPCountryCode, formatLogData } from '../helpers/functions/util';
 const { to } = require('await-to-js');
 import { Request, Response } from 'express';
-import { sendEmail2FA, sendEmailChanged } from '../helpers/functions/email';
+import { checkSendLimit, resetSendLimit, sendEmail2FA, sendEmailChanged } from '../helpers/functions/email';
 import { authenticator } from 'otplib';
 const QRCode = require('qrcode');
 const countryList = process.env.COUNTRY_LIST || '[]';
@@ -267,7 +267,10 @@ export async function updateEmail(req: Request, res: Response) {
             if (user_should_not_exist == null) {
                 //email 2FA alredy sent out to verify new email address exists?
                 if (email2faVerification === undefined) {
-                    const verificationCode = await updateEmail2fa(user.id);
+                    const verificationCode = await updateEmail2fa(user.id, false);
+                    if (!await checkSendLimit(user)) {
+                        return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+                    }
                     if (sendEmails === 'true') {
                         await sendEmail2FA(verificationCode, newEmail, user);
                     }
@@ -454,7 +457,7 @@ export async function getEncryptedSeed(req, res) {
                 return errorResponse(res, 'ACCOUNT_NOT_CONFIRMED', 400);
             }
 
-            let email2FAVerified = await verifyEmail2FA(recovery.user_id, email2fa);
+            let email2FAVerified = await reverifyEmail2FA(recovery.user_id, email2fa);
             const googleVerified = await verifyGoogle2FA(recovery.user_id, authenticator2fa);
 
             if (recovery.recovery_type_id == 3 || recovery.recovery_type_id == 6) {
@@ -493,7 +496,7 @@ export async function getEncryptedSeed(req, res) {
 
             //avoid replay attack, generate a new Email 2FA after it was validated and seed was sent
             if (user.payload.email) {
-                updateEmail2fa(user.id);
+                updateEmail2fa(user.id, false);
             }
 
             if (recovery_type_id !== 1 && email && recovery.email !== email) {
@@ -738,8 +741,10 @@ export async function change2FAMethods(req, res) {
             if (toggleEmail) {
                 if (!email2faVerification) {
 
-                    const verificationCode = await updateEmail2fa(user.id);
-
+                    const verificationCode = await updateEmail2fa(user.id, false);
+                    if (!await checkSendLimit(user)) {
+                        return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+                    }
                     if (sendEmails === 'true') {
                         await sendEmail2FA(verificationCode, user.email, user);
                     }
@@ -905,12 +910,20 @@ export async function verifyAuthenticatorCode(req, res) {
     }
 }
 
-async function updateEmail2fa(user_id) {
+async function updateEmail2fa(user_id: number, verified: boolean) {
     const user = await User.findOne({ where: { id: user_id } });
     const verificationCode = randomFixedInteger(6);
+
+    if (verified) {
+        user.email_verified_code = user.email_verification_code;
+    }
+
     user.email_verification_code = verificationCode;
     user.email2fa_valid_until = new Date(Date.now() + (15 * 60 * 1000)); //15 minutes valid
     user.payload.email2fa_retry_count = 0;
+
+    user.changed('payload', true)
+
 
     await user.save();
     return user.email_verification_code;
@@ -928,8 +941,10 @@ export async function send2FAEmail(req, res) {
         const sendEmails = process.env.SEND_EMAILS;
 
         try {
-            const verificationCode = await updateEmail2fa(user.id);
-
+            const verificationCode = await updateEmail2fa(user.id, false);
+            if (!await checkSendLimit(user)) {
+                return errorResponse(res, 'TOO_MANY_EMAILS_SENT', 409);
+            }
             if (sendEmails === 'true') {
                 await sendEmail2FA(verificationCode, user.email, user);
             }
@@ -1155,6 +1170,12 @@ export async function deleteAccount(req, res) {
     }
 }
 
+async function reverifyEmail2FA(user_id: string, code: string): Promise<boolean> {
+    const user = await User.findOne({ where: { id: user_id } });
+    const verified = user.payload.email === false || (user.email_verification_code === Number(code)) || (user.email_verified_code === Number(code));
+    return verified
+}
+
 async function verifyEmail2FA(user_id: string, code: string, isEmailChange: boolean = false, email_override: String = ''): Promise<boolean> {
     const user = await User.findOne({ where: { id: user_id } });
     const sendEmails = process.env.SEND_EMAILS;
@@ -1163,19 +1184,23 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
         const verified = user.email_verification_code === Number(code)
         if (!verified) {
             user.payload.email2fa_retry_count = (user.payload.email2fa_retry_count || 0) + 1;
+            user.changed('payload', true)
+            await user.save();
             if (user.payload.email2fa_retry_count >=3) {
-                const verificationCode = await updateEmail2fa(user.id);
+                const verificationCode = await updateEmail2fa(user.id, false);
                 if (sendEmails === 'true') {
                     if (!email_override) {
                         email_override = user.email
                     }
-                    await sendEmail2FA(verificationCode, email_override, user);
+                    if (!await checkSendLimit(user)) {
+                        await sendEmail2FA(verificationCode, email_override, user);
+                    }
                 }
             }
         } else {
             // change verification code so that it can be used only once
-            const verificationCode = randomFixedInteger(6);
-            user.email_verification_code = verificationCode;
+            await updateEmail2fa(user.id, true);
+            resetSendLimit(user)
         }
         return verified
     }
@@ -1184,15 +1209,26 @@ async function verifyEmail2FA(user_id: string, code: string, isEmailChange: bool
 
     if (!verified) {
         user.payload.email2fa_retry_count = (user.payload.email2fa_retry_count || 0) + 1;
+        user.changed('payload', true)
+        await user.save();
         if (user.payload.email2fa_retry_count >=3) {
-            const verificationCode = await updateEmail2fa(user.id);
+            const verificationCode = await updateEmail2fa(user.id, false);
             if (sendEmails === 'true') {
                 if (!email_override) {
                     email_override = user.email
                 }
-                await sendEmail2FA(verificationCode, email_override, user);
+                if (!await checkSendLimit(user)) {
+                    await sendEmail2FA(verificationCode, email_override, user);
+                }
             }
         }
+    } else {
+        if (user.payload.email !== false) {
+            // change verification code so that it can be used only once
+            await updateEmail2fa(user.id, true);
+            resetSendLimit(user)
+        }
+        
     }
 
     return verified
