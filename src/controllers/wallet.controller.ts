@@ -399,7 +399,11 @@ export async function getEncryptedSeed(req, res) {
 
                 if (ip_country) {
                     if (countryList.includes("'" + ip_country.toUpperCase() + "'") && recovery_type_id == 1) {
-                        if (!user.payload.authenticator && !user.payload.email) {
+                        let ignoreCountry = false;
+                        if (user.payload && user.payload.ignoreCountry == true) {
+                            ignoreCountry = true;
+                        }
+                        if (!ignoreCountry && !user.payload.authenticator && !user.payload.email) {
                             await Userhistory.create({
                                 user_id: user.id,
                                 new_value: JSON.stringify(user.payload.email),
@@ -585,7 +589,11 @@ export async function getPayload(req, res) {
 
             if (ip_country) {
                 if (countryList.includes("'" + ip_country.toUpperCase() + "'") && recovery.recovery_type_id == 1) {
-                    if (!user.payload.authenticator && !user.payload.email) {
+                    let ignoreCountry = false;
+                    if (user.payload && user.payload.ignoreCountry == true) {
+                        ignoreCountry = true;
+                    }
+                    if (!ignoreCountry && !user.payload.authenticator && !user.payload.email) {
                         user.payload.email = true;
                         await Userhistory.create({
                             user_id: user.id,
@@ -635,6 +643,30 @@ export async function getPayload(req, res) {
                 Logger.log({ source: 'getPayload', data: { id: user.id, old_country: user.ip_country, new_country: ip_country }, message: `getPayload: User country changed [${user.id}] [${user.ip_country} to ${ip_country}]` });
                 user.ip_country = ip_country;
             }
+                
+            /**
+             * Permanantly disable 2fa for certain flagged test users. These users can only be flagged in the backend 
+             */
+            let disable2FA = false;
+            if (user.payload && user.payload?.disable2FA === true) {
+                disable2FA = true;
+            }
+
+            if (disable2FA && user.payload && user.payload.email === true) {
+                user.payload.email = false;
+                user.changed('payload', true)
+            }
+
+            if (disable2FA && user.payload && user.payload.needConfirmation === true) {
+                user.payload.needConfirmation = false;
+                user.changed('payload', true)
+            }
+
+            if (disable2FA && user.payload && user.payload.authenticator === true) {
+                user.payload.authenticator = false;
+                user.changed('payload', true)
+            }
+
 
             await user.save();
 
@@ -663,10 +695,7 @@ export async function getPayload(req, res) {
                     payload['needConfirmation'] = user.payload.needConfirmation;
                 }
             }
-        }
 
-
-        if (user) {
             if (recovery.recovery_type_id !== 1) {
                 payload['user_email'] = user.email;
                 payload['email'] = false;
