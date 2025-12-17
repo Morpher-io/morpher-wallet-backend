@@ -51,6 +51,7 @@
     "sequelize-typescript": "^2.1.6",
     "ts-node": "^10.7.0",
     "typescript": "^5.5.4",
+    "uuid": "^13.0.0",
     "viem": "^2.19.8",
     "winston": "^3.7.2",
     "winston-aws-cloudwatch": "^3.0.0"
