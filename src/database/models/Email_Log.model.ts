@@ -1,7 +1,7 @@
 import {  Column, DataType, ForeignKey, Model, PrimaryKey, Table, Unique, BelongsTo } from 'sequelize-typescript';
 
 import * as moment from 'moment';
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { Email_Template } from './Email_Template.model';
 
 @Table({
