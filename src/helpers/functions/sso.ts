@@ -4,17 +4,11 @@ import { sha256 } from './util';
 import { Recovery_Type } from '../../database/models';
 
 import { OAuth2Client } from 'google-auth-library'
-import { Facebook } from 'fb';
-const options = {
-    app_id: process.env.FACEBOOK_APP_ID,
-    app_secret: process.env.FACEBOOK_APP_SECRET,
-    default_graph_version: 'v18.0'
-};
-const FB = new Facebook(options);
 import axios from 'axios';
 
 // Verify the sso user/token and return the user email and fetch key
 export const getKeyEmail = async (recoveryTypeId: number, token: any, key: string, email: string, vk_token: any) => {
+    const crypto = require('crypto');
     try {
         const testBackend = String(process.env.SEND_EMAILS || 'true') === 'false';
 
@@ -39,7 +33,6 @@ export const getKeyEmail = async (recoveryTypeId: number, token: any, key: strin
 
         // Process apple oath verification
         if (recovery_type == 'Apple') {
-            const crypto = require('crypto');
 
             // fail of no oath token was passed
             if (!token) {
@@ -154,10 +147,16 @@ export const getKeyEmail = async (recoveryTypeId: number, token: any, key: strin
         // Process facebook oath verification
         if (recovery_type == 'Facebook') {
             try {
-                // Set facebook access token and make the query for the current profile.
-                FB.setAccessToken(token);
-                const result = await FB.api('/me?fields=name,email', 'get');
+                const app_secret = process.env.FACEBOOK_APP_SECRET;
+                const appsecret_proof = crypto.createHmac('sha256', app_secret).update(token).digest('hex');
 
+                const { data: result } = await axios.get(`https://graph.facebook.com/v24.0/me`, {
+                    params: {
+                        fields: 'name,email',
+                        access_token: token,
+                        appsecret_proof
+                    }
+                });
 
                 if (!result.id) {
                     Logger.error({ source: 'getKeyEmail', data: { recoveryTypeId, recovery_type }, message: 'No sso user id returned' });
@@ -165,14 +164,15 @@ export const getKeyEmail = async (recoveryTypeId: number, token: any, key: strin
                 }
 
                 // Hash the facebook id with user id to get the database key.
-                const return_key = sha256(process.env.FACEBOOK_APP_ID + result.id);
+                const return_key = await sha256(process.env.FACEBOOK_APP_ID + result.id);
 
 
                 return { success: true, recovery_type, key: return_key, email: result.email }
             } catch (err) {
-                Logger.error({ source: 'getKeyEmail', data: { recoveryTypeId, recovery_type }, message: 'Error veryfting facebook token' + err.message || err.toString() });
+                const errorMessage = err.response?.data?.error?.message || err.message || err.toString();
+                Logger.error({ source: 'getKeyEmail', data: { recoveryTypeId, recovery_type }, message: 'Error veryfting facebook token: ' + errorMessage });
 
-                return { success: false, error: err.message || err.toString() }
+                return { success: false, error: errorMessage }
             }
         }
 

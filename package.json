@@ -23,7 +23,7 @@
     "@aws-sdk/client-ses": "^3.556.0",
     "apple-signin-auth": "^1.7.5",
     "await-to-js": "^3.0.0",
-    "axios": "^1.7.4",
+    "axios": "^1.13.2",
     "bad-words": "^3.0.4",
     "cors": "^2.8.5",
     "cron": "^1.8.2",
@@ -34,7 +34,6 @@
     "ethereumjs-util": "^7.1.4",
     "express": "^4.17.3",
     "express-rate-limit": "^7.4.1",
-    "fb": "^2.0.0",
     "google-auth-library": "^8.7.0",
     "helmet": "^5.0.2",
     "isomorphic-fetch": "^3.0.0",
@@ -52,7 +51,7 @@
     "sequelize-typescript": "^2.1.6",
     "ts-node": "^10.7.0",
     "typescript": "^5.5.4",
-    "validate.js": "^0.13.1",
+    "uuid": "^13.0.0",
     "viem": "^2.19.8",
     "winston": "^3.7.2",
     "winston-aws-cloudwatch": "^3.0.0"
@@ -73,7 +72,7 @@
     "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-prettier": "^4.0.0",
     "expect": "^27.5.1",
-    "mocha": "^9.2.2",
+    "mocha": "^11.7.5",
     "nodemon": "^3.1.4",
     "supertest": "^6.2.2"
   }
